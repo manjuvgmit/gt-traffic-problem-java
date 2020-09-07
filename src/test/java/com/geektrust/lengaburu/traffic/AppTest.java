@@ -3,7 +3,11 @@
  */
 package com.geektrust.lengaburu.traffic;
 
+import com.google.common.collect.ImmutableList;
 import org.junit.Test;
+
+import java.io.IOException;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
@@ -11,26 +15,41 @@ public class AppTest {
     App classUnderTest = new App();
 
     @Test
+    public void invalidParametersCombination() throws Exception {
+        assertEquals("Missing mandatory parameters. Please pass parameters in the format: <WEATHER ORBIT_1_TRAFFIC_SPEED ORBIT_2_TRAFFIC_SPEED>", classUnderTest.processInputFromCli(new String[]{ "input01 input02" }));
+    }
+
+    @Test
+    public void testInputFromFile() throws Exception {
+        runTestFromFile("src/test/resources/inputs/sample-01.txt", ImmutableList.of("CAR ORBIT2", "TUKTUK ORBIT1", "CAR ORBIT2", "TUKTUK ORBIT2"));
+    }
+
+    @Test
     public void testScenario01() throws Exception {
-        runTest("RAINY 40 25", "CAR ORBIT2");
+        runTestFromCliInputs("RAINY 40 25", "CAR ORBIT2");
     }
 
     @Test
     public void testScenario02() throws Exception {
-        runTest("SUNNY 12 10", "TUKTUK ORBIT1");
+        runTestFromCliInputs("SUNNY 12 10", "TUKTUK ORBIT1");
     }
 
     @Test
     public void testScenario03() throws Exception {
-        runTest("WINDY 14 20", "CAR ORBIT2");
+        runTestFromCliInputs("WINDY 14 20", "CAR ORBIT2");
     }
 
     @Test
     public void testScenario04() throws Exception {
-        runTest("RAINY 8 15", "TUKTUK ORBIT2");
+        runTestFromCliInputs("RAINY 8 15", "TUKTUK ORBIT2");
     }
 
-    private void runTest(String input, String output) throws Exception {
-        assertEquals(output, classUnderTest.determineVehicleAndRoute(input));
+    private void runTestFromCliInputs(String input, String output) throws Exception {
+        assertEquals(output, classUnderTest.processInputFromCli(new String[]{ input }));
     }
+
+    private void runTestFromFile(String args, List<String> expected) throws IOException {
+        assertEquals(expected, classUnderTest.processInputFromFile(args));
+    }
+
 }

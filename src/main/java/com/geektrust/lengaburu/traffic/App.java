@@ -3,116 +3,55 @@
  */
 package com.geektrust.lengaburu.traffic;
 
-import com.geektrust.lengaburu.traffic.entities.InputParameters;
-import com.geektrust.lengaburu.traffic.entities.Orbit;
-import com.geektrust.lengaburu.traffic.entities.Vehicles;
-import com.geektrust.lengaburu.traffic.entities.Weather;
 import com.geektrust.lengaburu.traffic.utils.MiscUtils;
 
-import java.util.Comparator;
-import java.util.Map;
-
-import static com.geektrust.lengaburu.traffic.entities.Weather.ImpactOnCraters.DECREASE;
-import static java.util.Arrays.stream;
-import static java.util.function.Function.identity;
-import static java.util.stream.Collectors.toMap;
+import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Main app and entry point for the problem
  */
 public class App {
 
+    /**
+     * Main entry point processing multiple input patterns
+     * @param args VM args passed in from CLI
+     * @throws Exception throws exception if there any issues with input parameters
+     */
     public static void main(String[] args) throws Exception {
         App app = new App();
         if (args.length == 1) {
-            MiscUtils.getInputFromFile(args[0]).forEach(commands -> System.out.println(app.determineVehicleAndRoute(commands)));
+            System.out.println(String.join("\n", app.processInputFromFile(args[0])));
         } else if (args.length == 3) {
-            System.out.println(app.determineVehicleAndRoute(String.join(" ", args)));
+            System.out.println(app.processInputFromCli(args));
         } else {
             System.out.println("Invalid Parameters.");
         }
     }
 
-    public String determineVehicleAndRoute(String argument) {
-        try {
-            InputParameters inputParameters = InputParameters.parse(argument);
-
-            Map<Vehicles, Map<Orbit, Double>> weatherFilteredAndTimeCalculatedData = stream(Vehicles.values())
-                    // Filter all vehicles not supported for the weather first
-                    .filter(vehicles -> vehicles.getAllowedWeather().contains(inputParameters.getWeather()))
-                    // Calculate time would take for each vehicle for all orbits available. i.e. ORBIT1, ORBIT2
-                    .collect(toMap(identity(), vehicles -> calculateTimeTakenForEachVehicle(vehicles, inputParameters)));
-
-            return stream(Orbit.values())
-                    // Find out faster vehicle for each orbit
-                    .collect(toMap(identity(), orbit -> weatherFilteredAndTimeCalculatedData.entrySet().stream().min(Comparator.comparing(r -> r.getValue().get(orbit))).get()))
-                    // Find out fastest vehicle among faster vehicle for each orbit
-                    .entrySet().stream().min(Comparator.comparing(t -> t.getValue().getValue().get(t.getKey())))
-                    // format data in required way
-                    .map(entry -> entry.getValue().getKey().getShortName() + " " + entry.getKey().name())
-                    .orElse(null);
-
-        } catch (Exception ex) {
-            return ex.getMessage();
-        }
+    /**
+     * Assumes passed CLI parameters are program arguments directly and processes them
+     * @param args program arguments like 'WINDY 45 20'
+     * @return fastest route and vehicle like 'CAR ORBIT1'
+     */
+    public String processInputFromCli(String[] args) {
+        return getRouteResolver().determineVehicleAndRoute(String.join(" ", args));
     }
 
     /**
-     * Calculates time taken by each vehicle for all available orbits considering the weather conditions.
-     * @param @param vehicle vehicle chosen for an orbit to travel
-     * @param inputParameters input parameters passed from command line consisting of weather and traffic parameters
-     * @return a map containing time taken by the vehicle for each orbit in minutes
+     * Assumes passed CLI parameter is path where program arguments are stored.
+     * Reads the file and processed each line of the txt file as program argument.
+     * @param arg program arguments like 'inputs/sample-01.txt' , '~/Downloads/sample-02.txt'
+     * @return fastest route and vehicle like 'CAR ORBIT1'
      */
-    private Map<Orbit, Double> calculateTimeTakenForEachVehicle(Vehicles vehicle, InputParameters inputParameters) {
-        return stream(Orbit.values()).collect(toMap(identity(), orbit -> getTimeTakenForVehicleForAnOrbit(orbit, vehicle, inputParameters)));
+    public List<String> processInputFromFile(String arg) throws IOException {
+        return MiscUtils.getInputFromFile(arg).stream()
+                .map(commands -> getRouteResolver().determineVehicleAndRoute(commands))
+                .collect(Collectors.toList());
     }
 
-    /**
-     * Calculates overall time taken by a vehicle to travel the given orbit's distance considering potholes delay as well.
-     * @param orbit orbit being considered for a vehicle to travel
-     * @param vehicle vehicle chosen for an orbit to travel
-     * @param inputParameters input parameters passed from command line consisting of weather and traffic parameters
-     * @return time taken in minutes for a vehicle to travel the passed in Orbit's distance without delay from potholes
-     */
-    private double getTimeTakenForVehicleForAnOrbit(Orbit orbit, Vehicles vehicle, InputParameters inputParameters) {
-        return (getStraightUpTimeTakenInHours(orbit, vehicle, inputParameters) * 60.0)
-                + getDelayDueToCratersInMinutes(orbit, vehicle, inputParameters);
-    }
-
-    /**
-     * Calculates time taken by a vehicle to travel the given orbit's distance without considering potholes delay
-     * @param orbit orbit being considered for a vehicle to travel
-     * @param vehicle vehicle chosen for an orbit to travel
-     * @param inputParameters input parameters passed from command line consisting of weather and traffic parameters
-     * @return time taken in minutes for a vehicle to travel the passed in Orbit's distance without delay from potholes
-     */
-    private double getStraightUpTimeTakenInHours(Orbit orbit, Vehicles vehicle, InputParameters inputParameters) {
-        return 1.0 * orbit.getDistance().getValue()
-                / Math.min(vehicle.getSpeed().getValue(), inputParameters.getOrbitsCurrentTrafficSpeeds().get(orbit).getValue());
-    }
-
-    /**
-     * Calculates delay caused for any vehicle type when going over an orbit considering weather conditions
-     * @param orbit orbit being considered for a vehicle to travel
-     * @param vehicle vehicle chosen for an orbit to travel
-     * @param inputParameters input parameters passed from command line consisting of weather and traffic parameters
-     * @return time delay in minutes introduced for a vehicle to travel a given Orbit's distance considering weather condition
-     */
-    private double getDelayDueToCratersInMinutes(Orbit orbit, Vehicles vehicle, InputParameters inputParameters) {
-        return vehicle.getTimeToCrossCrater() * getTotalNoOfCraters(orbit, inputParameters);
-    }
-
-    /**
-     * Returns either reduced or increased number of craters depending on weather and orbit.
-     * Result has been cast to int to keep craters count in integers
-     * @param inputParameters input parameters
-     * @return increased or decreased count of craters for the given weather and orbit
-     */
-    private int getTotalNoOfCraters(Orbit orbit, InputParameters inputParameters) {
-        Weather currentWeather = inputParameters.getWeather();
-        // Total no of craters = craters + craters created due to season
-        return (int) (orbit.getNoOfCraters()
-                * (1 + ((currentWeather.getImpactOnCraters() == DECREASE ? -1 : 1)) * currentWeather.getRateOfImpactOnCraters())
-        );
+    private RouteResolver getRouteResolver() {
+        return new RouteResolver();
     }
 }

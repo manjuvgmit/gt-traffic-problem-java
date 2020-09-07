@@ -14,7 +14,7 @@ public final class InputParameters {
         Objects.requireNonNull(parameters, "Input parameters cannot be null.");
         String[] parametersArray = parameters.split(" ");
         if (parametersArray.length < 3) {
-            throw new Exception("Missing mandatory parameters. Please pass parameters in the format \' WEATHER ORBIT_1_TRAFFIC_SPEED ORBIT_2_TRAFFIC_SPEED \'");
+            throw new Exception("Missing mandatory parameters. Please pass parameters in the format: <WEATHER ORBIT_1_TRAFFIC_SPEED ORBIT_2_TRAFFIC_SPEED>");
         }
         InputParameters parametersInstance = new InputParameters(Weather.valueOf(parametersArray[0]));
         populateOrbitSpeeds(parametersArray, parametersInstance);
